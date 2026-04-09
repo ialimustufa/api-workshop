@@ -22,6 +22,7 @@ You'll need these links (also on screen):
 | Source Code (optional) | `{{REPO_URL}}` |
 | API Base URL | `https://events-api-production-80fe.up.railway.app` | 
 | Postman Collection | `[LINK](https://studentconnects.postman.co/workspace/API-Day-Singapore~a643e53e-5d56-49b0-9d59-70dfc9f91540/overview)` |
+| MCP Server | https://www.postman.com/explore/mcp-generator/?workspaceId=a643e53e-5d56-49b0-9d59-70dfc9f91540 |
 
 ---
 
