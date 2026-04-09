@@ -18,7 +18,7 @@ You'll need these links (also on screen):
 | Resource | Link |
 |----------|------|
 | Fork the Documentation Collection | `{{FORK_LINK}}` |
-| OpenAPI Spec (for import) | `[SPEC_URL](https://github.com/ialimustufa/api-workshop/blob/main/openapi.yaml)` |
+| OpenAPI Spec (for import) | `[SPEC_URL](https://raw.githubusercontent.com/ialimustufa/api-workshop/refs/heads/main/openapi.yaml)` |
 | Source Code (optional) | `{{REPO_URL}}` |
 | API Base URL | `https://events-api-production-80fe.up.railway.app` | 
 | Postman Collection | `[LINK](https://studentconnects.postman.co/workspace/API-Day-Singapore~a643e53e-5d56-49b0-9d59-70dfc9f91540/overview)` |
