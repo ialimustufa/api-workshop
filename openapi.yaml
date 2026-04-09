@@ -1,0 +1,755 @@
+openapi: 3.1.0
+info:
+  title: Event Scheduler API
+  description: A multi-user event scheduling API for workshop demonstrations. Register to get an API key, then create, manage, and find time slots for events.
+  version: 1.0.0
+
+servers:
+  - url: "{baseUrl}"
+    description: Workshop server
+    variables:
+      baseUrl:
+        default: http://localhost:3000
+        description: Base URL of the Event Scheduler API
+
+security: []
+
+paths:
+  /health:
+    get:
+      operationId: healthCheck
+      summary: Health check
+      description: Returns the server status. No authentication required.
+      tags: [System]
+      responses:
+        "200":
+          description: Server is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  timestamp:
+                    type: string
+                    format: date-time
+                    example: "2026-04-09T10:00:00Z"
+                  version:
+                    type: string
+                    example: "1.0.0"
+
+  /register:
+    post:
+      operationId: registerUser
+      summary: Register a new user
+      description: Create an account and receive an API key. If the email is already registered, the existing API key is returned.
+      tags: [Authentication]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email]
+              properties:
+                name:
+                  type: string
+                  example: Alice
+                email:
+                  type: string
+                  format: email
+                  example: alice@example.com
+      responses:
+        "201":
+          description: Registration successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegisterResponse"
+              example:
+                message: "Registration successful! Use your API key in the x-api-key header for all requests."
+                api_key: "wk_a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+                name: Alice
+                email: alice@example.com
+        "200":
+          description: Email already registered — existing key returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegisterResponse"
+              example:
+                message: "Email already registered. Here's your existing API key."
+                api_key: "wk_a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+                name: Alice
+                email: alice@example.com
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /events:
+    post:
+      operationId: createEvent
+      summary: Create a new event
+      description: Schedule a new event. The server validates for time conflicts, past dates, and required fields.
+      tags: [Events]
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateEventRequest"
+            example:
+              title: Team Standup
+              description: Daily sync with engineering team
+              start_time: "2026-04-15T09:00:00Z"
+              end_time: "2026-04-15T09:30:00Z"
+              tag: meeting
+      responses:
+        "201":
+          description: Event created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  event:
+                    $ref: "#/components/schemas/Event"
+              example:
+                message: Event created successfully.
+                event:
+                  id: 1
+                  title: Team Standup
+                  description: Daily sync with engineering team
+                  start_time: "2026-04-15T09:00:00Z"
+                  end_time: "2026-04-15T09:30:00Z"
+                  tag: meeting
+                  created_at: "2026-04-09T10:00:00Z"
+                  updated_at: "2026-04-09T10:00:00Z"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: Time conflict with an existing event
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  conflicting_event:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                      title:
+                        type: string
+                      start_time:
+                        type: string
+                        format: date-time
+                      end_time:
+                        type: string
+                        format: date-time
+              example:
+                error: "Time conflict: this event overlaps with an existing event."
+                conflicting_event:
+                  id: 3
+                  title: Lunch with Sarah
+                  start_time: "2026-04-15T09:00:00Z"
+                  end_time: "2026-04-15T09:45:00Z"
+
+    get:
+      operationId: listEvents
+      summary: List your events
+      description: Retrieve your events with optional filters for date, time range, tag, and sort order.
+      tags: [Events]
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: date
+          in: query
+          description: Filter by specific date (YYYY-MM-DD)
+          schema:
+            type: string
+            format: date
+            example: "2026-04-15"
+        - name: from
+          in: query
+          description: Filter events starting on or after this datetime (ISO 8601)
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          description: Filter events starting before this datetime (ISO 8601)
+          schema:
+            type: string
+            format: date-time
+        - name: tag
+          in: query
+          description: Filter by tag
+          schema:
+            type: string
+            enum: [meeting, focus, break, social, general]
+        - name: sort
+          in: query
+          description: Sort order by start_time
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: asc
+      responses:
+        "200":
+          description: List of events
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+                  events:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Event"
+              example:
+                count: 1
+                events:
+                  - id: 1
+                    title: Team Standup
+                    description: Daily sync with engineering team
+                    start_time: "2026-04-15T09:00:00Z"
+                    end_time: "2026-04-15T09:30:00Z"
+                    tag: meeting
+                    created_at: "2026-04-09T10:00:00Z"
+                    updated_at: "2026-04-09T10:00:00Z"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /events/{id}:
+    get:
+      operationId: getEvent
+      summary: Get a single event
+      description: Retrieve a specific event by its ID. Returns 404 if the event doesn't exist or belongs to another user.
+      tags: [Events]
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - $ref: "#/components/parameters/EventId"
+      responses:
+        "200":
+          description: Event details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  event:
+                    $ref: "#/components/schemas/Event"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    patch:
+      operationId: updateEvent
+      summary: Update an event
+      description: Update one or more fields of an existing event. If times are updated, overlap and past-date validation is re-applied.
+      tags: [Events]
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - $ref: "#/components/parameters/EventId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateEventRequest"
+            example:
+              title: Updated Standup
+              start_time: "2026-04-15T09:15:00Z"
+              end_time: "2026-04-15T09:45:00Z"
+      responses:
+        "200":
+          description: Event updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  event:
+                    $ref: "#/components/schemas/Event"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Time conflict with an existing event
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  conflicting_event:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                      title:
+                        type: string
+                      start_time:
+                        type: string
+                        format: date-time
+                      end_time:
+                        type: string
+                        format: date-time
+
+    delete:
+      operationId: deleteEvent
+      summary: Delete an event
+      description: Permanently delete an event by its ID.
+      tags: [Events]
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - $ref: "#/components/parameters/EventId"
+      responses:
+        "200":
+          description: Event deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Event deleted successfully.
+                  deleted_event_id:
+                    type: integer
+                    example: 1
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /events/find-slot:
+    post:
+      operationId: findAvailableSlot
+      summary: Find available time slots
+      description: Search for open time slots on a given date that can fit an event of the specified duration. Optionally restrict the search to morning, afternoon, or evening.
+      tags: [Events]
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FindSlotRequest"
+            example:
+              date: "2026-04-15"
+              duration_minutes: 45
+              preferred_time: afternoon
+      responses:
+        "200":
+          description: Available slots (may be empty if none found)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FindSlotResponse"
+              examples:
+                slotsFound:
+                  summary: Slots available
+                  value:
+                    date: "2026-04-15"
+                    duration_requested: 45
+                    preferred_time: afternoon
+                    available_slots:
+                      - start_time: "2026-04-15T12:00:00Z"
+                        end_time: "2026-04-15T14:00:00Z"
+                        gap_minutes: 120
+                      - start_time: "2026-04-15T15:30:00Z"
+                        end_time: "2026-04-15T17:00:00Z"
+                        gap_minutes: 90
+                    message: "Found 2 available slots that fit a 45-minute event."
+                noSlots:
+                  summary: No slots available
+                  value:
+                    date: "2026-04-15"
+                    duration_requested: 45
+                    preferred_time: afternoon
+                    available_slots: []
+                    message: "No available slots found for the requested duration on this date."
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /progress:
+    get:
+      operationId: getProgress
+      summary: Check workshop progress
+      description: Returns the authenticated user's milestone completion status based on their actual API usage.
+      tags: [Progress]
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "200":
+          description: User's milestone progress
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProgressResponse"
+              example:
+                name: Alice
+                milestones:
+                  registered:
+                    completed: true
+                  first_event_created:
+                    completed: true
+                  multiple_events:
+                    completed: false
+                  used_find_slot:
+                    completed: true
+                  updated_event:
+                    completed: true
+                  deleted_event:
+                    completed: false
+                completed: 4
+                total: 6
+                completion_percentage: 67
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /progress/certificate:
+    get:
+      operationId: getCertificate
+      summary: View achievement certificate
+      description: Returns a self-contained HTML certificate page showing the user's workshop progress. Authenticate via the api_key query parameter (so the URL can be opened directly in a browser).
+      tags: [Progress]
+      parameters:
+        - name: api_key
+          in: query
+          required: true
+          description: Your API key (e.g. wk_abc123)
+          schema:
+            type: string
+      responses:
+        "200":
+          description: HTML certificate page
+          content:
+            text/html:
+              schema:
+                type: string
+        "400":
+          description: Missing API key (HTML error page)
+          content:
+            text/html:
+              schema:
+                type: string
+        "401":
+          description: Invalid API key (HTML error page)
+          content:
+            text/html:
+              schema:
+                type: string
+
+  /leaderboard:
+    get:
+      operationId: getLeaderboard
+      summary: View workshop leaderboard
+      description: Returns all participants and their completion percentage, sorted by progress. No authentication required.
+      tags: [Progress]
+      responses:
+        "200":
+          description: Leaderboard of all participants
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeaderboardResponse"
+              example:
+                total_participants: 2
+                leaderboard:
+                  - name: Alice
+                    completed: 6
+                    total: 6
+                    completion_percentage: 100
+                  - name: Bob
+                    completed: 4
+                    total: 6
+                    completion_percentage: 67
+
+  /admin/reset:
+    post:
+      operationId: adminReset
+      summary: Reset database (admin only)
+      description: Drops and recreates all tables. Requires the x-admin-key header. Use with extreme caution.
+      tags: [Admin]
+      parameters:
+        - name: x-admin-key
+          in: header
+          required: true
+          description: Admin secret key (set via ADMIN_KEY environment variable)
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Database reset successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+              example:
+                message: "Database reset successfully. All users and events have been cleared."
+        "401":
+          description: Invalid or missing admin key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key
+      description: API key obtained from POST /register
+
+  parameters:
+    EventId:
+      name: id
+      in: path
+      required: true
+      description: Event ID
+      schema:
+        type: integer
+        example: 1
+
+  schemas:
+    Event:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        description:
+          type: string
+        start_time:
+          type: string
+          format: date-time
+        end_time:
+          type: string
+          format: date-time
+        tag:
+          type: string
+          enum: [meeting, focus, break, social, general]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateEventRequest:
+      type: object
+      required: [title, start_time, end_time]
+      properties:
+        title:
+          type: string
+          maxLength: 200
+          description: Event title (required)
+        description:
+          type: string
+          default: ""
+          description: Event description (optional)
+        start_time:
+          type: string
+          format: date-time
+          description: Start time in ISO 8601 format
+        end_time:
+          type: string
+          format: date-time
+          description: End time in ISO 8601 format (must be after start_time)
+        tag:
+          type: string
+          enum: [meeting, focus, break, social, general]
+          default: general
+          description: Event category tag
+
+    UpdateEventRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          maxLength: 200
+        description:
+          type: string
+        start_time:
+          type: string
+          format: date-time
+        end_time:
+          type: string
+          format: date-time
+        tag:
+          type: string
+          enum: [meeting, focus, break, social, general]
+
+    FindSlotRequest:
+      type: object
+      required: [date, duration_minutes]
+      properties:
+        date:
+          type: string
+          format: date
+          description: Date to search (YYYY-MM-DD)
+        duration_minutes:
+          type: integer
+          minimum: 15
+          maximum: 480
+          description: Desired event duration in minutes
+        preferred_time:
+          type: string
+          enum: [morning, afternoon, evening]
+          description: "Restrict search window: morning (08-12), afternoon (12-17), evening (17-21)"
+
+    FindSlotResponse:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        duration_requested:
+          type: integer
+        preferred_time:
+          type: string
+          nullable: true
+        available_slots:
+          type: array
+          items:
+            type: object
+            properties:
+              start_time:
+                type: string
+                format: date-time
+              end_time:
+                type: string
+                format: date-time
+              gap_minutes:
+                type: integer
+        message:
+          type: string
+
+    RegisterResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        api_key:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+
+    ProgressResponse:
+      type: object
+      properties:
+        name:
+          type: string
+        milestones:
+          type: object
+          properties:
+            registered:
+              $ref: "#/components/schemas/MilestoneStatus"
+            first_event_created:
+              $ref: "#/components/schemas/MilestoneStatus"
+            multiple_events:
+              $ref: "#/components/schemas/MilestoneStatus"
+            used_find_slot:
+              $ref: "#/components/schemas/MilestoneStatus"
+            updated_event:
+              $ref: "#/components/schemas/MilestoneStatus"
+            deleted_event:
+              $ref: "#/components/schemas/MilestoneStatus"
+        completed:
+          type: integer
+        total:
+          type: integer
+        completion_percentage:
+          type: integer
+
+    MilestoneStatus:
+      type: object
+      properties:
+        completed:
+          type: boolean
+
+    LeaderboardResponse:
+      type: object
+      properties:
+        total_participants:
+          type: integer
+        leaderboard:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              completed:
+                type: integer
+              total:
+                type: integer
+              completion_percentage:
+                type: integer
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+
+  responses:
+    BadRequest:
+      description: Validation error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error: "Title is required."
+    Unauthorized:
+      description: Missing or invalid API key
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error: "Missing API key. Register at POST /register to get one."
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error: "Event not found."
